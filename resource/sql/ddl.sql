@@ -1,3 +1,5 @@
+-- 版本: 1.0.0
+
 -- 用户表
 CREATE TABLE `user` (
                         `id` BIGINT NOT NULL AUTO_INCREMENT COMMENT '用户ID',
@@ -26,3 +28,8 @@ CREATE TABLE `user_room_relation` (
                                       KEY `idx_room_id` (`room_id`),
                                       KEY `idx_room_joined_at` (`room_id`, `joined_at`)
 ) COMMENT='用户与房间关系表';
+
+-- 版本: 1.0.1
+
+-- 用户增加是否在线标识
+ALTER TABLE `user` ADD COLUMN `online` BOOLEAN DEFAULT FALSE COMMENT '是否在线';

@@ -2,19 +2,18 @@ package ws
 
 import (
 	"context"
-	"github.com/gogf/gf/v2/frame/g"
-	"github.com/gogf/gf/v2/os/glog"
-	"github.com/gogf/gf/v2/util/gconv"
-	"github.com/gorilla/websocket"
 	"im-chat/internal/dao"
 	"im-chat/internal/model/entity"
-	"im-chat/utility"
 	"im-chat/utility/auth"
+
+	"github.com/gogf/gf/v2/frame/g"
+	"github.com/gogf/gf/v2/os/glog"
+	"github.com/gorilla/websocket"
 
 	"github.com/gogf/gf/v2/errors/gcode"
 	"github.com/gogf/gf/v2/errors/gerror"
 
-	"im-chat/api/ws/v1"
+	v1 "im-chat/api/ws/v1"
 )
 
 func (c *ControllerV1) ChatChannel(ctx context.Context, _ *v1.ChatChannelReq) (res *v1.ChatChannelRes, err error) {
@@ -35,9 +34,8 @@ func (c *ControllerV1) ChatChannel(ctx context.Context, _ *v1.ChatChannelReq) (r
 	defer ws.Close()
 	c.chatManager.AddChannel(ctx, userID, ws)
 	defer c.chatManager.RemoveChannel(ctx, userID, ws)
-	roomCol := dao.UserRoomRelation.Columns()
 	for {
-		data := new(v1.ChatData)
+		data := new(v1.Message)
 		err := ws.ReadJSON(data)
 		if err != nil {
 			if websocket.IsCloseError(err, websocket.CloseGoingAway, websocket.CloseMessage, websocket.CloseNoStatusReceived, websocket.CloseNormalClosure) {
@@ -46,20 +44,8 @@ func (c *ControllerV1) ChatChannel(ctx context.Context, _ *v1.ChatChannelReq) (r
 			glog.Warning(ctx, err)
 			break
 		}
-		if data.To == nil {
-			continue
-		}
 		data.From = user
-		data.ID = utility.NewID()
-		vals, err := dao.UserRoomRelation.Ctx(ctx).Where("room_id = ?", data.To.Id).Fields([]string{roomCol.UserId}).Array()
-		if err != nil {
-			return nil, gerror.WrapCode(gcode.CodeInternalError, err, "获取房间用户失败")
-		}
-		userIDs := gconv.Int64s(vals)
-		err = c.chatManager.SendUsersMessage(ctx, userIDs, data)
-		if err != nil {
-			glog.Warningf(ctx, "消息[%s]发送失败", data.ID)
-		}
+		c.chatManager.HandleMessage(data)
 	}
 	return new(v1.ChatChannelRes), nil
 }

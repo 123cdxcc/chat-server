@@ -13,4 +13,5 @@ type User struct {
 	g.Meta   `orm:"table:user, do:true"`
 	Id       interface{} // 用户ID
 	Username interface{} // 用户名
+	Online   interface{} // 是否在线
 }

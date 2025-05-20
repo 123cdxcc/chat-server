@@ -22,12 +22,14 @@ type UserDao struct {
 type UserColumns struct {
 	Id       string // 用户ID
 	Username string // 用户名
+	Online   string // 是否在线
 }
 
 // userColumns holds the columns for the table user.
 var userColumns = UserColumns{
 	Id:       "id",
 	Username: "username",
+	Online:   "online",
 }
 
 // NewUserDao creates and returns a new DAO object for table data access.

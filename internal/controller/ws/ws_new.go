@@ -5,10 +5,11 @@
 package ws
 
 import (
-	"github.com/gorilla/websocket"
 	"im-chat/api/ws"
 	"im-chat/internal/logic/chat"
 	"net/http"
+
+	"github.com/gorilla/websocket"
 )
 
 type ControllerV1 struct {
@@ -16,13 +17,13 @@ type ControllerV1 struct {
 	chatManager *chat.ChannelManager
 }
 
-func NewV1() ws.IWsV1 {
+func NewV1(channelManager *chat.ChannelManager) ws.IWsV1 {
 	return &ControllerV1{
 		upgrader: &websocket.Upgrader{
 			CheckOrigin: func(r *http.Request) bool {
 				return true
 			},
 		},
-		chatManager: chat.NewChannelManager(),
+		chatManager: channelManager,
 	}
 }

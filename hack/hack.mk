@@ -10,6 +10,10 @@ up: cli.install
 build: cli.install
 	@gf build -ew
 
+.PHONY: build.serve
+build.serve: cli.install
+	@GOOS=linux GOARCH=amd64 go build -o "bin/chat" -ldflags "-X main.buildTime=$(shell date +%s) -X main.gitCommit=$(shell git rev-parse --short HEAD)" ./main.go
+
 # Parse api and generate controller/sdk.
 .PHONY: ctrl
 ctrl: cli.install

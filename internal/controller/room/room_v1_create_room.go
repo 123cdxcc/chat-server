@@ -3,13 +3,12 @@ package room
 import (
 	"context"
 	"github.com/gogf/gf/v2/database/gdb"
+	"github.com/gogf/gf/v2/errors/gcode"
+	"github.com/gogf/gf/v2/errors/gerror"
 	"im-chat/internal/dao"
 	"im-chat/internal/model/do"
 	"im-chat/internal/model/entity"
 	"im-chat/utility/auth"
-
-	"github.com/gogf/gf/v2/errors/gcode"
-	"github.com/gogf/gf/v2/errors/gerror"
 
 	"im-chat/api/room/v1"
 )

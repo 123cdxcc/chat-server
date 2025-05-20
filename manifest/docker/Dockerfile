@@ -5,12 +5,12 @@ FROM loads/alpine:3.8
 ###############################################################################
 
 ENV WORKDIR                 /app
-ADD resource                $WORKDIR/
-ADD ./temp/linux_amd64/main $WORKDIR/main
-RUN chmod +x $WORKDIR/main
+ADD manifest                $WORKDIR/
+ADD ./bin/app $WORKDIR/app
+RUN chmod +x $WORKDIR/app
 
 ###############################################################################
 #                                   START
 ###############################################################################
 WORKDIR $WORKDIR
-CMD ./main
+CMD ./app
