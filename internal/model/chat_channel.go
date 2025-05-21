@@ -74,8 +74,8 @@ func (c *ChatChannel) runAutoKeepAliveTask() {
 			select {
 			case <-c.keepAliveTicker.C:
 				c.SendMessage(&v1.Message{
-					MessageType: v1.MessageTypeHeartbeat,
-					Data:        "keep alive",
+					Type: v1.MessageTypeHeartbeat,
+					Data: "keep alive",
 				})
 			case <-c.closeChan:
 				c.keepAliveTicker.Stop()

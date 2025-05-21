@@ -26,7 +26,7 @@ func NewChannelManager() *ChannelManager {
 		channels:   make(map[int64]*model.ChatChannel),
 		handleChan: make(chan *v1.Message, 100),
 	}
-	manager.Start()
+	manager.start()
 	return manager
 }
 
@@ -92,7 +92,7 @@ func (c *ChannelManager) SendUsersMessage(ctx context.Context, userIDs []int64, 
 	return nil
 }
 
-func (c *ChannelManager) Start() {
+func (c *ChannelManager) start() {
 	go func() {
 		glog.Debugf(context.Background(), "message handle task started")
 		for message := range c.handleChan {
@@ -111,7 +111,7 @@ func (c *ChannelManager) HandleMessage(message *v1.Message) {
 
 // 处理消息
 func (c *ChannelManager) handleMessage(ctx context.Context, message *v1.Message) {
-	switch message.MessageType {
+	switch message.Type {
 	case v1.MessageTypeHeartbeat:
 		return
 	case v1.MessageTypeChatData:
@@ -120,6 +120,7 @@ func (c *ChannelManager) handleMessage(ctx context.Context, message *v1.Message)
 			glog.Debugf(ctx, "消息[%s]没有目标房间", data.ID)
 			return
 		}
+		data.From = message.From
 		data.ID = utility.NewID()
 		roomCol := dao.UserRoomRelation.Columns()
 		vals, err := dao.UserRoomRelation.Ctx(ctx).
@@ -136,10 +137,11 @@ func (c *ChannelManager) handleMessage(ctx context.Context, message *v1.Message)
 			glog.Debugf(ctx, "消息[%s]没有目标用户", data.ID)
 			return
 		}
+		dao.Room.Ctx(ctx).WherePri(data.To.Id).Scan(&data.To)
 		userIDs := gconv.Int64s(vals)
 		err = c.SendUsersMessage(ctx, userIDs, &v1.Message{
-			MessageType: v1.MessageTypeChatData,
-			Data:        data,
+			Type: v1.MessageTypeChatData,
+			Data: data,
 		})
 		if err != nil {
 			glog.Warningf(ctx, "消息[%s]发送失败", data.ID)

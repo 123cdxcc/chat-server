@@ -14,27 +14,23 @@ const (
 	MessageTypeHeartbeat
 )
 
-func (m MessageType) String() string {
-	return []string{"chat_data", "heartbeat"}[m]
-}
-
 type Message struct {
-	From        *entity.User `json:"-"`
-	MessageType MessageType  `json:"message_type"`
-	Data        any          `json:"data"`
+	From *entity.User `json:"-"`
+	Type MessageType  `json:"type"`
+	Data any          `json:"data"`
 }
 
 // json反序列化时将data单独处理
 func (m *Message) UnmarshalJSON(data []byte) error {
 	var temp struct {
-		MessageType MessageType     `json:"message_type"`
-		Data        json.RawMessage `json:"data"`
+		Type MessageType     `json:"type"`
+		Data json.RawMessage `json:"data"`
 	}
 	if err := json.Unmarshal(data, &temp); err != nil {
 		return err
 	}
-	m.MessageType = temp.MessageType
-	switch temp.MessageType {
+	m.Type = temp.Type
+	switch temp.Type {
 	case MessageTypeChatData:
 		var chatData ChatData
 		if err := json.Unmarshal(temp.Data, &chatData); err != nil {
