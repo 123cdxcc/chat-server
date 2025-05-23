@@ -12,6 +12,7 @@ type MessageType int
 const (
 	MessageTypeChatData MessageType = iota
 	MessageTypeHeartbeat
+	MessageTypeStreamChatData
 )
 
 type Message struct {

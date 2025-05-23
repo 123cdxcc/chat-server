@@ -109,6 +109,24 @@ func (c *ChannelManager) HandleMessage(message *v1.Message) {
 	c.handleChan <- message
 }
 
+// 获取房间在线用户
+func (c *ChannelManager) GetRoomOnlineUsers(ctx context.Context, roomID int64) ([]int64, error) {
+	vals, err := dao.UserRoomRelation.Ctx(ctx).
+		InnerJoin(dao.User.Table(), fmt.Sprintf("%s.%s = %s.%s", dao.User.Table(), dao.User.Columns().Id, dao.UserRoomRelation.Table(), dao.UserRoomRelation.Columns().UserId)).
+		Where("room_id = ?", roomID).
+		Where("user.online = ?", true).
+		Fields([]string{dao.UserRoomRelation.Columns().UserId}).
+		Array()
+	if err != nil {
+		return nil, err
+	}
+	userIDs := make([]int64, 0, len(vals))
+	for _, val := range vals {
+		userIDs = append(userIDs, gconv.Int64(val))
+	}
+	return userIDs, nil
+}
+
 // 处理消息
 func (c *ChannelManager) handleMessage(ctx context.Context, message *v1.Message) {
 	switch message.Type {
@@ -122,23 +140,16 @@ func (c *ChannelManager) handleMessage(ctx context.Context, message *v1.Message)
 		}
 		data.From = message.From
 		data.ID = utility.NewID()
-		roomCol := dao.UserRoomRelation.Columns()
-		vals, err := dao.UserRoomRelation.Ctx(ctx).
-			InnerJoin(dao.User.Table(), fmt.Sprintf("%s.%s = %s.%s", dao.User.Table(), dao.User.Columns().Id, dao.UserRoomRelation.Table(), dao.UserRoomRelation.Columns().UserId)).
-			Where("room_id = ?", data.To.Id).
-			Where("user.online = ?", true).
-			Fields([]string{roomCol.UserId}).
-			Array()
+		userIDs, err := c.GetRoomOnlineUsers(ctx, data.To.Id)
 		if err != nil {
 			glog.Warningf(ctx, "消息[%s]获取房间用户失败", data.ID)
 			return
 		}
-		if len(vals) == 0 {
+		if len(userIDs) == 0 {
 			glog.Debugf(ctx, "消息[%s]没有目标用户", data.ID)
 			return
 		}
 		dao.Room.Ctx(ctx).WherePri(data.To.Id).Scan(&data.To)
-		userIDs := gconv.Int64s(vals)
 		err = c.SendUsersMessage(ctx, userIDs, &v1.Message{
 			Type: v1.MessageTypeChatData,
 			Data: data,
