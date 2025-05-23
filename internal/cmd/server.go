@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"im-chat/api/auth"
+	"im-chat/api/friend"
 	"im-chat/api/room"
 	"im-chat/api/user"
 	"im-chat/api/ws"
@@ -20,13 +21,14 @@ func NewNoAuthServer(authV1 auth.IAuthV1) NoAuthServer {
 
 type AuthServer func(group *ghttp.RouterGroup)
 
-func NewAuthServer(userV1 user.IUserV1, wsV1 ws.IWsV1, roomV1 room.IRoomV1) AuthServer {
+func NewAuthServer(userV1 user.IUserV1, wsV1 ws.IWsV1, roomV1 room.IRoomV1, friendV1 friend.IFriendV1) AuthServer {
 	return func(group *ghttp.RouterGroup) {
 		group.Middleware(authUtil.SessionAuth)
 		group.Bind(
 			userV1,
 			wsV1,
 			roomV1,
+			friendV1,
 		)
 	}
 }

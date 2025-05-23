@@ -33,3 +33,15 @@ CREATE TABLE `user_room_relation` (
 
 -- 用户增加是否在线标识
 ALTER TABLE `user` ADD COLUMN `online` BOOLEAN DEFAULT FALSE COMMENT '是否在线';
+
+-- 版本: 1.0.2
+
+-- 用户与用户好友关系表
+CREATE TABLE `user_friend_relation` (
+    `id` BIGINT NOT NULL AUTO_INCREMENT COMMENT '关系ID',
+    `user_id` BIGINT NOT NULL COMMENT '用户ID',
+    `friend_id` BIGINT NOT NULL COMMENT '好友ID',
+    `created_at` DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uniq_user_friend` (`user_id`, `friend_id`)
+) COMMENT='用户与用户好友关系表';

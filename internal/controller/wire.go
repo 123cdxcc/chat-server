@@ -2,6 +2,7 @@ package controller
 
 import (
 	"im-chat/internal/controller/auth"
+	"im-chat/internal/controller/friend"
 	"im-chat/internal/controller/room"
 	"im-chat/internal/controller/user"
 	"im-chat/internal/controller/ws"
@@ -13,6 +14,7 @@ var AuthProviderSet = wire.NewSet(
 	user.NewV1,
 	room.NewV1,
 	ws.NewV1,
+	friend.NewV1,
 )
 
 var NoAuthProviderSet = wire.NewSet(

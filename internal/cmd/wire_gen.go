@@ -8,6 +8,7 @@ package cmd
 
 import (
 	"im-chat/internal/controller/auth"
+	"im-chat/internal/controller/friend"
 	"im-chat/internal/controller/room"
 	"im-chat/internal/controller/user"
 	"im-chat/internal/controller/ws"
@@ -23,7 +24,8 @@ func InjectorApp() (*App, error) {
 	channelManager := chat.NewChannelManager()
 	iWsV1 := ws.NewV1(channelManager)
 	iRoomV1 := room.NewV1()
-	authServer := NewAuthServer(iUserV1, iWsV1, iRoomV1)
+	iFriendV1 := friend.NewV1()
+	authServer := NewAuthServer(iUserV1, iWsV1, iRoomV1, iFriendV1)
 	app := NewApp(noAuthServer, authServer)
 	return app, nil
 }
