@@ -3,44 +3,47 @@ package chat
 import (
 	"context"
 	"fmt"
-	v1 "im-chat/api/ws/v1"
+	v1 "im-chat/api/chat/v1"
 	"im-chat/internal/dao"
 	"im-chat/internal/model"
 	"im-chat/internal/model/do"
+	"im-chat/internal/model/entity"
 	"im-chat/utility"
+	"im-chat/utility/auth"
+	"sync"
 
-	"github.com/gogf/gf/v2/errors/gcode"
-	"github.com/gogf/gf/v2/errors/gerror"
 	"github.com/gogf/gf/v2/os/glog"
 	"github.com/gogf/gf/v2/util/gconv"
 	"github.com/gorilla/websocket"
 )
 
 type ChannelManager struct {
-	channels   map[int64]*model.ChatChannel
+	channels   *sync.Map
 	handleChan chan *v1.Message
 }
 
 func NewChannelManager() *ChannelManager {
 	manager := &ChannelManager{
-		channels:   make(map[int64]*model.ChatChannel),
+		channels:   &sync.Map{},
 		handleChan: make(chan *v1.Message, 100),
 	}
 	manager.start()
 	return manager
 }
 
-func (c *ChannelManager) GetChannel(userID int64) (*model.ChatChannel, error) {
-	channel, ok := c.channels[userID]
+func (c *ChannelManager) GetChannel(userID int64) (*model.ChatChannel, bool) {
+	channel, ok := c.channels.Load(userID)
 	if !ok {
-		return nil, gerror.NewCode(gcode.CodeNotFound, "通道不存在")
+		return nil, false
 	}
-	return channel, nil
+	return channel.(*model.ChatChannel), true
 }
 
 func (c *ChannelManager) AddChannel(ctx context.Context, userID int64, ws *websocket.Conn) {
-	if _, ok := c.channels[userID]; !ok {
-		c.channels[userID] = model.NewChatChannel(userID)
+	channel, ok := c.channels.Load(userID)
+	if !ok {
+		channel = model.NewChatChannel(userID)
+		c.channels.Store(userID, channel)
 		_, err := dao.User.Ctx(ctx).Where("id = ?", userID).Data(do.User{
 			Online: true,
 		}).Update()
@@ -49,17 +52,17 @@ func (c *ChannelManager) AddChannel(ctx context.Context, userID int64, ws *webso
 		}
 		glog.Debugf(ctx, "用户[%d]已上线", userID)
 	}
-	c.channels[userID].AddConnection(ws)
+	channel.(*model.ChatChannel).AddConnection(ws)
 }
 
 func (c *ChannelManager) RemoveChannel(ctx context.Context, userID int64, ws *websocket.Conn) {
-	channel, ok := c.channels[userID]
+	channel, ok := c.GetChannel(userID)
 	if !ok {
 		return
 	}
 	channel.RemoveConnection(ws)
 	if len(channel.ChannelConnections) == 0 {
-		delete(c.channels, userID)
+		c.channels.Delete(userID)
 		glog.Debugf(ctx, "用户[%d]已离线", userID)
 		_, err := dao.User.Ctx(ctx).Where("id = ?", userID).Data(do.User{
 			Online: false,
@@ -71,11 +74,8 @@ func (c *ChannelManager) RemoveChannel(ctx context.Context, userID int64, ws *we
 }
 
 func (c *ChannelManager) SendUserMessage(ctx context.Context, userID int64, data *v1.Message) error {
-	channel, err := c.GetChannel(userID)
-	if err != nil {
-		if !gerror.HasCode(err, gcode.CodeNotFound) {
-			return err
-		}
+	channel, ok := c.GetChannel(userID)
+	if !ok {
 		glog.Debugf(ctx, "用户[%d]无在线设备", userID)
 		return nil
 	}
@@ -105,12 +105,26 @@ func (c *ChannelManager) Stop() {
 	close(c.handleChan)
 }
 
-func (c *ChannelManager) HandleMessage(message *v1.Message) {
+func (c *ChannelManager) HandleMessage(ctx context.Context, message *v1.Message) {
+	if message.Type == v1.MessageTypeChatData {
+		userID := auth.GetSessionUserID(ctx)
+		if userID == 0 {
+			glog.Warningf(ctx, "用户未登录")
+			return
+		}
+		data := safeGetMessageChatData(message)
+		if data == nil {
+			glog.Warningf(ctx, "消息转换失败: %v", message)
+			return
+		}
+		data.SenderID = userID
+		message.Data = data
+	}
 	c.handleChan <- message
 }
 
 // 获取房间在线用户
-func (c *ChannelManager) GetRoomOnlineUsers(ctx context.Context, roomID int64) ([]int64, error) {
+func (c *ChannelManager) getRoomOnlineUsers(ctx context.Context, roomID int64) ([]int64, error) {
 	vals, err := dao.UserRoomRelation.Ctx(ctx).
 		InnerJoin(dao.User.Table(), fmt.Sprintf("%s.%s = %s.%s", dao.User.Table(), dao.User.Columns().Id, dao.UserRoomRelation.Table(), dao.UserRoomRelation.Columns().UserId)).
 		Where("room_id = ?", roomID).
@@ -127,35 +141,129 @@ func (c *ChannelManager) GetRoomOnlineUsers(ctx context.Context, roomID int64) (
 	return userIDs, nil
 }
 
+func safeGetMessageChatData(message *v1.Message) *v1.ChatDataInput {
+	if message.Type != v1.MessageTypeChatData {
+		return nil
+	}
+	var data *v1.ChatDataInput
+	err := gconv.Struct(message.Data, &data)
+	if err != nil {
+		return nil
+	}
+	return data
+}
+
 // 处理消息
 func (c *ChannelManager) handleMessage(ctx context.Context, message *v1.Message) {
 	switch message.Type {
 	case v1.MessageTypeHeartbeat:
 		return
 	case v1.MessageTypeChatData:
-		data := message.Data.(v1.ChatData)
-		if data.To == nil {
-			glog.Debugf(ctx, "消息[%s]没有目标房间", data.ID)
+		data := safeGetMessageChatData(message)
+		if data == nil {
+			glog.Warningf(ctx, "消息转换失败: %v", message)
 			return
 		}
-		data.From = message.From
-		data.ID = utility.NewID()
-		userIDs, err := c.GetRoomOnlineUsers(ctx, data.To.Id)
-		if err != nil {
-			glog.Warningf(ctx, "消息[%s]获取房间用户失败", data.ID)
+		if data.Receiver == nil {
+			glog.Debugf(ctx, "消息[%s]没有接受者", data.ClientSeqID)
 			return
 		}
-		if len(userIDs) == 0 {
-			glog.Debugf(ctx, "消息[%s]没有目标用户", data.ID)
-			return
-		}
-		dao.Room.Ctx(ctx).WherePri(data.To.Id).Scan(&data.To)
-		err = c.SendUsersMessage(ctx, userIDs, &v1.Message{
-			Type: v1.MessageTypeChatData,
-			Data: data,
-		})
-		if err != nil {
-			glog.Warningf(ctx, "消息[%s]发送失败", data.ID)
+		switch data.Receiver.Type {
+		case v1.ChatObjectTypeUser:
+			// 发送消息用户信息
+			sender := new(entity.User)
+			err := dao.User.Ctx(ctx).WherePri(data.SenderID).Scan(sender)
+			if err != nil {
+				glog.Warningf(ctx, "消息[%s]获取发送者信息失败: %v", data.ClientSeqID, err)
+				return
+			}
+			// 接收消息用户信息
+			receiver := new(entity.User)
+			err = dao.User.Ctx(ctx).WherePri(data.Receiver.ID).Scan(receiver)
+			if err != nil {
+				glog.Warningf(ctx, "消息[%s]获取用户信息失败: %v", data.ClientSeqID, err)
+				return
+			}
+			data.Receiver.Name = receiver.Username
+			message := &v1.ChatDataOutput{
+				ID:             utility.NewUUID(),
+				AckClientSeqID: data.ClientSeqID,
+				Sender:         &v1.Sender{ID: sender.Id, Name: sender.Username},
+				Receiver:       data.Receiver,
+				Content:        data.Content,
+			}
+			err = c.saveMessage(ctx, message)
+			if err != nil {
+				glog.Warningf(ctx, "消息[%s]保存失败: %v", message.ID, err)
+				return
+			}
+			err = c.SendUserMessage(ctx, data.Receiver.ID, &v1.Message{
+				Type: v1.MessageTypeChatData,
+				Data: message,
+			})
+			if err != nil {
+				glog.Warningf(ctx, "消息[%s]发送失败: %v", message.ID, err)
+			}
+		case v1.ChatObjectTypeRoom:
+			// 接收消息的房间信息
+			room := new(entity.Room)
+			err := dao.Room.Ctx(ctx).WherePri(data.Receiver.ID).Scan(room)
+			if err != nil {
+				glog.Warningf(ctx, "消息[%s]获取房间信息失败: %v", data.ClientSeqID, err)
+				return
+			}
+			data.Receiver.Name = room.Name
+			// 获取房间在线用户
+			userIDs, err := c.getRoomOnlineUsers(ctx, data.Receiver.ID)
+			if err != nil {
+				glog.Warningf(ctx, "消息[%s]获取房间用户失败: %v", data.ClientSeqID, err)
+				return
+			}
+			if len(userIDs) == 0 {
+				glog.Debugf(ctx, "消息[%s]没有目标用户", data.ClientSeqID)
+				return
+			}
+			sender := new(entity.User)
+			err = dao.User.Ctx(ctx).WherePri(data.SenderID).Scan(sender)
+			if err != nil {
+				glog.Warningf(ctx, "消息[%s]获取发送者信息失败: %v", data.ClientSeqID, err)
+				return
+			}
+			message := &v1.ChatDataOutput{
+				ID:             utility.NewUUID(),
+				AckClientSeqID: data.ClientSeqID,
+				Sender:         &v1.Sender{ID: sender.Id, Name: sender.Username},
+				Receiver:       data.Receiver,
+				Content:        data.Content,
+			}
+			err = c.saveMessage(ctx, message)
+			if err != nil {
+				glog.Warningf(ctx, "消息[%s]保存失败: %v", message.ID, err)
+				return
+			}
+			err = c.SendUsersMessage(ctx, userIDs, &v1.Message{
+				Type: v1.MessageTypeChatData,
+				Data: message,
+			})
+			if err != nil {
+				glog.Warningf(ctx, "消息[%s]发送失败: %v", message.ID, err)
+			}
 		}
 	}
+}
+
+func (c *ChannelManager) saveMessage(ctx context.Context, message *v1.ChatDataOutput) error {
+	_, err := dao.ChatMessage.Ctx(ctx).Data(do.ChatMessage{
+		Id:           message.ID,
+		ClientSeqId:  message.AckClientSeqID,
+		SenderId:     message.Sender.ID,
+		ReceiverId:   message.Receiver.ID,
+		ReceiverType: message.Receiver.Type,
+		Content:      message.Content,
+	}).Insert()
+	if err != nil {
+		glog.Warningf(ctx, "消息[%s]保存失败: %v", message.ID, err)
+		return err
+	}
+	return nil
 }

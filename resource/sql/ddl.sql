@@ -45,3 +45,27 @@ CREATE TABLE `user_friend_relation` (
     PRIMARY KEY (`id`),
     UNIQUE KEY `uniq_user_friend` (`user_id`, `friend_id`)
 ) COMMENT='用户与用户好友关系表';
+
+-- 聊天用户记录表，废弃原因：采用视图
+-- CREATE TABLE `chat_record` (
+--     `id` BIGINT NOT NULL AUTO_INCREMENT COMMENT '记录ID',
+--     `type` VARCHAR(50) NOT NULL COMMENT '聊天类型(user/room)',
+--     `object_id` BIGINT NOT NULL COMMENT '聊天对象ID',
+--     `last_message_id` BIGINT NOT NULL COMMENT '最后一条消息ID',
+--     `last_message_time` DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '最后消息时间',
+--     PRIMARY KEY (`id`),
+--     KEY `idx_type_object_id` (`type`, `object_id`),
+--     KEY `idx_last_message_time` (`last_message_time`)
+-- )
+
+-- 聊天记录表
+CREATE TABLE `chat_message` (
+    `id` VARCHAR(255) NOT NULL COMMENT '消息ID',
+    `client_seq_id` VARCHAR(255) NOT NULL COMMENT '客户端序列号',
+    `sender_id` BIGINT NOT NULL COMMENT '发送者ID(用户ID)',
+    `receiver_id` BIGINT NOT NULL COMMENT '接收者ID(用户ID或房间ID, 根据receiver_type确定)',
+    `receiver_type` VARCHAR(50) NOT NULL COMMENT '接收者类型(user/room)',
+    `content` TEXT NOT NULL COMMENT '消息内容',
+    `created_at` DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    PRIMARY KEY (`id`)
+) COMMENT='聊天记录表';

@@ -5,6 +5,11 @@
 up: cli.install
 	@gf up -a
 
+# Generate wire.go file.
+.PHONY: wire
+wire: cli.install
+	@wire ./internal/...
+
 # Build binary using configuration from hack/config.yaml.
 .PHONY: build
 build: cli.install

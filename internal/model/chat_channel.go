@@ -2,7 +2,7 @@ package model
 
 import (
 	"context"
-	v1 "im-chat/api/ws/v1"
+	v1 "im-chat/api/chat/v1"
 	"time"
 
 	"slices"
@@ -60,7 +60,7 @@ func (c *ChatChannel) runBackgroundSendMessageTask() {
 			for _, conn := range c.ChannelConnections {
 				err := conn.WriteJSON(message)
 				if err != nil {
-					glog.Warningf(context.Background(), "用户[%d]设备[%s->%s]发送消息失败", c.UserID, conn.LocalAddr().String(), conn.RemoteAddr().String())
+					glog.Warningf(context.Background(), "用户[%d]设备[%s->%s]发送消息[%v]失败", c.UserID, conn.LocalAddr().String(), conn.RemoteAddr().String(), message.Data.(v1.ChatDataOutput).ID)
 				}
 			}
 		}

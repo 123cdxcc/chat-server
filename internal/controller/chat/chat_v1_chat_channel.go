@@ -1,9 +1,7 @@
-package ws
+package chat
 
 import (
 	"context"
-	"im-chat/internal/dao"
-	"im-chat/internal/model/entity"
 	"im-chat/utility/auth"
 
 	"github.com/gogf/gf/v2/frame/g"
@@ -13,18 +11,13 @@ import (
 	"github.com/gogf/gf/v2/errors/gcode"
 	"github.com/gogf/gf/v2/errors/gerror"
 
-	v1 "im-chat/api/ws/v1"
+	v1 "im-chat/api/chat/v1"
 )
 
 func (c *ControllerV1) ChatChannel(ctx context.Context, _ *v1.ChatChannelReq) (res *v1.ChatChannelRes, err error) {
 	userID := auth.GetSessionUserID(ctx)
 	if userID == 0 {
 		return nil, gerror.NewCode(gcode.CodeNotAuthorized)
-	}
-	user := new(entity.User)
-	err = dao.User.Ctx(ctx).WherePri(userID).Scan(user)
-	if err != nil {
-		return nil, gerror.WrapCode(gcode.CodeInternalError, err, "获取用户信息失败")
 	}
 	request := g.RequestFromCtx(ctx)
 	ws, err := c.upgrader.Upgrade(request.Response.Writer, request.Request, nil)
@@ -44,8 +37,7 @@ func (c *ControllerV1) ChatChannel(ctx context.Context, _ *v1.ChatChannelReq) (r
 			glog.Warning(ctx, err)
 			break
 		}
-		data.From = user
-		c.chatManager.HandleMessage(data)
+		c.chatManager.HandleMessage(ctx, data)
 	}
 	return new(v1.ChatChannelRes), nil
 }

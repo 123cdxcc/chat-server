@@ -8,10 +8,10 @@ package cmd
 
 import (
 	"im-chat/internal/controller/auth"
+	chat2 "im-chat/internal/controller/chat"
 	"im-chat/internal/controller/friend"
 	"im-chat/internal/controller/room"
 	"im-chat/internal/controller/user"
-	"im-chat/internal/controller/ws"
 	"im-chat/internal/logic/chat"
 )
 
@@ -22,10 +22,10 @@ func InjectorApp() (*App, error) {
 	noAuthServer := NewNoAuthServer(iAuthV1)
 	iUserV1 := user.NewV1()
 	channelManager := chat.NewChannelManager()
-	iWsV1 := ws.NewV1(channelManager)
+	iChatV1 := chat2.NewV1(channelManager)
 	iRoomV1 := room.NewV1()
 	iFriendV1 := friend.NewV1()
-	authServer := NewAuthServer(iUserV1, iWsV1, iRoomV1, iFriendV1)
+	authServer := NewAuthServer(iUserV1, iChatV1, iRoomV1, iFriendV1)
 	app := NewApp(noAuthServer, authServer)
 	return app, nil
 }
